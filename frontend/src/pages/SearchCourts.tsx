@@ -26,26 +26,41 @@ import {
 
 import './SearchCourts.css';
 
-// 1. EXTRAÍDO: Mover los datos estáticos fuera del componente mejora el rendimiento.
-const CATEGORIES = [
-  { id: 'futbol-7', name: 'Fútbol 7', image: '/recuadro futbol 7.jpg', desc: 'Canchas de pasto sintético iluminadas' },
-  { id: 'futbol-11', name: 'Fútbol 11', image: '/recuadro futbol 11.jpg', desc: 'Canchas oficiales de grass profesional' },
-  { id: 'padel', name: 'Pádel', image: '/recuadro padel.jpg', desc: 'Canchas de vidrio con blindex' },
-  { id: 'tenis', name: 'Tenis', image: '/recuadro tenis.jpg', desc: 'Superficie de arcilla y rápida' },
-  { id: 'bask', name: 'Básquetbol', image: '/recuadro basquetball.jpg', desc: 'Gimnasio techado profesional' },
-  { id: 'voley', name: 'Voleibol', image: '/recuadro voleyball.jpg', desc: 'Canchas de arena profesional' },
-  { id: 'pingpong', name: 'Mesas de Ping Pong', image: '/recuadro pingpong.jpg', desc: 'Salón indoor climatizado' },
-];
+// 1. Interfaz para los datos que vienen de PostgreSQL
+interface CanchaDB {
+  id: number;
+  nombre: string;
+  tipo_deporte: string;
+  precio_hora: number;
+}
+
+// 2. Función para mapear el deporte de la BD con tus imágenes locales y descripciones
+const obtenerVisualesCancha = (tipoDeporte: string) => {
+  switch (tipoDeporte) {
+    case 'Fútbol 7': return { image: '/recuadro futbol 7.jpg', desc: 'Canchas de pasto sintético iluminadas' };
+    case 'Fútbol 11': return { image: '/recuadro futbol 11.jpg', desc: 'Canchas oficiales de grass profesional' };
+    case 'Pádel': return { image: '/recuadro padel.jpg', desc: 'Canchas de vidrio con blindex' };
+    case 'Tenis': return { image: '/recuadro tenis.jpg', desc: 'Superficie de arcilla y rápida' };
+    case 'Básquetbol': return { image: '/recuadro basquetball.jpg', desc: 'Gimnasio techado profesional' };
+    case 'Voleibol': return { image: '/recuadro voleyball.jpg', desc: 'Canchas de arena profesional' };
+    case 'Mesas de Ping Pong': return { image: '/recuadro pingpong.jpg', desc: 'Salón indoor climatizado' };
+    default: return { image: '/placeholder-cancha.jpg', desc: 'Recinto deportivo' };
+  }
+};
 
 const SearchCourts: React.FC = () => {
   const [userName, setUserName] = useState('Usuario');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // 3. Estado para guardar las canchas de la base de datos
+  const [canchas, setCanchas] = useState<CanchaDB[]>([]);
 
   const router = useIonRouter();
 
   useEffect(() => {
+    // Verificar sesión
     const logged = localStorage.getItem('user_logged_in') === 'true';
     setIsLoggedIn(logged);
     if (logged) {
@@ -54,6 +69,21 @@ const SearchCourts: React.FC = () => {
     } else {
       setUserName('Usuario');
     }
+
+    // 4. Fetch para obtener las canchas desde Node.js/PostgreSQL
+    const fetchCanchas = async () => {
+      try {
+        const respuesta = await fetch('http://localhost:3000/api/canchas');
+        if (respuesta.ok) {
+          const data = await respuesta.json();
+          setCanchas(data);
+        }
+      } catch (error) {
+        console.error("Error al conectar con el backend:", error);
+      }
+    };
+
+    fetchCanchas();
   }, []);
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
@@ -62,17 +92,21 @@ const SearchCourts: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('user_logged_in');
     localStorage.removeItem('userName');
+    localStorage.removeItem('token'); // Aseguramos borrar el token JWT también
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userRol');
     setIsLoggedIn(false);
     setUserName('Usuario');
     setIsSidebarOpen(false);
     router.push('/login', 'root', 'replace');
   };
 
-  const handleSelectCategory = (categoryId: string) => {
+  const handleSelectCategory = (canchaId: number) => {
     if (!isLoggedIn) {
       setShowAuthModal(true);
     } else {
-      router.push(`/cliente/horarios/${categoryId}`);
+      // Pasamos el ID real de la base de datos a la siguiente vista
+      router.push(`/cliente/horarios/${canchaId}`);
     }
   };
 
@@ -125,47 +159,52 @@ const SearchCourts: React.FC = () => {
         </IonToolbar>
       </IonHeader>
 
-      {/* CONTENIDO PRINCIPAL: Fondo manejado 100% en CSS ahora */}
       <IonContent className="ion-padding content-main-bg">
         <div className="welcome-section">
           <h2>¡Hola, {userName}! 👋</h2>
           <p>¿Qué deporte jugamos hoy? Selecciona una categoría para ver los horarios.</p>
         </div>
 
-        {/* TARJETAS DE DEPORTES */}
+        {/* 5. TARJETAS DINÁMICAS DESDE POSTGRESQL */}
         <div className="categories-grid">
-          {CATEGORIES.map((cat) => (
-            <IonCard
-              key={cat.id}
-              className="category-card"
-              button
-              onClick={() => handleSelectCategory(cat.id)}
-            >
-              <div className="card-image-container">
-                <img src={cat.image} alt={cat.name} className="category-bg-image" />
-                <div className="card-gradient-overlay" />
-                <IonCardHeader className="card-header-absolute">
-                  <IonCardTitle className="card-title-white">{cat.name}</IonCardTitle>
-                </IonCardHeader>
-              </div>
-              <IonCardContent className="card-content-custom">
-                <p>{cat.desc}</p>
-                <IonButton
-                  fill="solid"
-                  color="light"
-                  expand="block"
-                  size="small"
-                  className="ion-margin-top btn-ver-horarios"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleSelectCategory(cat.id);
-                  }}
-                >
-                  VER HORARIOS
-                </IonButton>
-              </IonCardContent>
-            </IonCard>
-          ))}
+          {canchas.map((cancha) => {
+            const visuales = obtenerVisualesCancha(cancha.tipo_deporte);
+            
+            return (
+              <IonCard
+                key={cancha.id}
+                className="category-card"
+                button
+                onClick={() => handleSelectCategory(cancha.id)}
+              >
+                <div className="card-image-container">
+                  <img src={visuales.image} alt={cancha.tipo_deporte} className="category-bg-image" />
+                  <div className="card-gradient-overlay" />
+                  <IonCardHeader className="card-header-absolute">
+                    <IonCardTitle className="card-title-white">{cancha.tipo_deporte}</IonCardTitle>
+                  </IonCardHeader>
+                </div>
+                <IonCardContent className="card-content-custom">
+                  <p style={{ fontWeight: 'bold', color: '#0055ff' }}>{cancha.nombre}</p>
+                  <p>{visuales.desc}</p>
+                  <p style={{ marginTop: '8px' }}>Valor: ${cancha.precio_hora} / hora</p>
+                  <IonButton
+                    fill="solid"
+                    color="light"
+                    expand="block"
+                    size="small"
+                    className="ion-margin-top btn-ver-horarios"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleSelectCategory(cancha.id);
+                    }}
+                  >
+                    VER HORARIOS
+                  </IonButton>
+                </IonCardContent>
+              </IonCard>
+            );
+          })}
         </div>
 
         {/* MODAL PARA USUARIOS SIN SESIÓN */}
@@ -204,7 +243,6 @@ const SearchCourts: React.FC = () => {
           </div>
         )}
 
-        {/* FONDO OSCURO DEL MENÚ LATERAL */}
         {isSidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar} aria-hidden="true" />}
 
         {/* MENÚ LATERAL DE PERFIL */}
@@ -215,8 +253,6 @@ const SearchCourts: React.FC = () => {
         >
           <h3 className="sidebar-title">MI PERFIL</h3>
           <div className="sidebar-menu-list">
-            
-            {/* 3. CORREGIDO: router.push en vez de window.location.href */}
             <button
               type="button"
               className="sidebar-item active"

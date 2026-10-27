@@ -17,30 +17,45 @@ const Login: React.FC = () => {
   const router = useIonRouter();
 
   // Función única para iniciar sesión
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!userEmail.trim() || !userPassword) {
-      setErrorMsg(
-        'Debes completar todos los campos para iniciar sesión.'
-      );
+      setErrorMsg('Debes completar todos los campos para iniciar sesión.');
       return;
     }
 
     setErrorMsg('');
 
-    const extractedName = userEmail.includes('@')
-      ? userEmail.split('@')[0]
-      : userEmail;
+    try {
+      // 1. Petición POST a la ruta de login del servidor
+      const respuesta = await fetch('http://localhost:3000/api/usuarios/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: userEmail, password: userPassword }),
+      });
 
-    const formattedName =
-      extractedName.charAt(0).toUpperCase() +
-      extractedName.slice(1);
+      const data = await respuesta.json();
 
-    // Guardar los datos de sesión
-    localStorage.setItem('userName', formattedName);
-    localStorage.setItem('user_logged_in', 'true');
+      // 2. Evaluar respuesta
+      if (respuesta.ok) {
+        // 3. Guardar el token y los datos de sesión reales que envía PostgreSQL
+        localStorage.setItem('token', data.token); // Guardamos el JWT
+        localStorage.setItem('userName', data.usuario.nombre);
+        localStorage.setItem('userRol', data.usuario.rol);
+        localStorage.setItem('userId', data.usuario.id.toString());
+        localStorage.setItem('user_logged_in', 'true');
 
-    // Navegar al inicio del cliente
-    router.push('/cliente/inicio', 'root');
+        // 4. Redirigir al inicio
+        router.push('/cliente/inicio', 'root');
+      } else {
+        // Muestra el mensaje de error del backend (ej. "Correo o contraseña incorrectos")
+        setErrorMsg(data.mensaje || 'Error al iniciar sesión.');
+      }
+    } catch (error) {
+      console.error('Error en la petición:', error);
+      setErrorMsg('Error de conexión con el servidor. Verifica que el backend esté corriendo.');
+    }
   };
 
   // Gestionar Enter y el botón mediante el formulario

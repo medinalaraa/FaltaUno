@@ -16,7 +16,7 @@ const Register: React.FC = () => {
   
   const router = useIonRouter();
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!nombre || !rut || !email || !telefono || !password || !repeatPassword) {
       setErrorMsg('Debes completar todos los campos obligatorios para continuar.');
       return;
@@ -27,9 +27,33 @@ const Register: React.FC = () => {
       return;
     }
 
-    setErrorMsg('');
-    alert('¡Cuenta creada con éxito! Ahora puedes iniciar sesión.');
-    router.push('/login');
+    setErrorMsg(''); // Limpiar errores previos
+
+    try {
+      // 1. Petición POST al backend
+      const respuesta = await fetch('http://localhost:3000/api/usuarios/registro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // 2. Enviamos los datos al servidor (rut y teléfono se envían, pero requerirán actualizar la DB luego)
+        body: JSON.stringify({ nombre, rut, email, telefono, password }),
+      });
+
+      const data = await respuesta.json();
+
+      // 3. Evaluar la respuesta del servidor
+      if (respuesta.ok) {
+        alert('¡Cuenta creada con éxito! Ahora puedes iniciar sesión.');
+        router.push('/login');
+      } else {
+        // Si el correo ya existe, muestra el mensaje de error del backend
+        setErrorMsg(data.mensaje || 'Error al registrar el usuario.');
+      }
+    } catch (error) {
+      console.error('Error en la petición:', error);
+      setErrorMsg('Error de conexión con el servidor. Verifica que el backend esté corriendo.');
+    }
   };
 
   return (

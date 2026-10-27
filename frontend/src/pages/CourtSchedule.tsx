@@ -23,37 +23,47 @@ interface CourtData {
 
 const CourtSchedule: React.FC = () => {
   const router = useIonRouter();
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>(); // Este es el ID de la cancha que viene de SearchCourts
 
   const [selectedDate, setSelectedDate] = useState('2026-09-20');
   const [selectedTime, setSelectedTime] = useState('12:00 - 13:00');
 
   const [tableData, setTableData] = useState<CourtData[]>([
-    { id: 1, name: 'Cancha 1', time: '12:00 - 13:00', status: 'Ocupada' },
-    { id: 2, name: 'Cancha 2', time: '12:00 - 13:00', status: 'Reservar' },
-    { id: 3, name: 'Cancha 3', time: '12:00 - 13:00', status: 'Reservar' },
-    { id: 4, name: 'Cancha 4', time: '12:00 - 13:00', status: 'Reservar' },
-    { id: 5, name: 'Cancha 5', time: '12:00 - 13:00', status: 'Ocupada' },
+    { id: 1, name: 'Cancha Principal', time: '12:00 - 13:00', status: 'Reservar' },
   ]);
 
-  const sportId = id || 'futbol-7';
+  // Usamos un fallback por si el ID ahora es numérico para que no se rompa la imagen
+  const sportId = parseInt(id || '1', 10) === 1 ? 'futbol-7' : 'padel'; 
   const mascotImage = SPORT_MASCOTS[sportId] || SPORT_MASCOTS['futbol-7'];
 
   const handleBuscar = () => {
-    const newResults: CourtData[] = [1, 2, 3, 4, 5].map((courtNum) => ({
+    // Simulamos la disponibilidad por ahora para mantener tu diseño
+    const newResults: CourtData[] = [1].map((courtNum) => ({
       id: courtNum,
-      name: `Cancha ${courtNum}`,
+      name: `Cancha Seleccionada`,
       time: selectedTime,
-      status: Math.random() > 0.4 ? 'Reservar' : 'Ocupada',
+      status: 'Reservar',
     }));
     setTableData(newResults);
   };
 
-  // Función extraída para mantener el JSX limpio
+
+  // --- Redirige al pago con los datos de la reserva ---
   const handleReservar = (court: CourtData) => {
-    if (court.status === 'Reservar') {
-      alert(`Has seleccionado la ${court.name} para las ${court.time} del día ${selectedDate}`);
+    if (court.status !== 'Reservar') return;
+
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      alert('Error: Debes iniciar sesión para reservar.');
+      router.push('/login');
+      return;
     }
+
+    const cancha_id = parseInt(id || '1', 10);
+    
+    // Enviamos la fecha y el horario por la URL hacia la pasarela de pago
+    router.push(`/cliente/pago/${cancha_id}?fecha=${selectedDate}&horario=${encodeURIComponent(court.time)}`);
   };
 
   const openDatePicker = (e: React.MouseEvent<HTMLInputElement>) => {
@@ -70,7 +80,6 @@ const CourtSchedule: React.FC = () => {
   return (
     <IonPage>
       <IonContent fullscreen className="schedule-content">
-        {/* Botón para volver al inicio */}
         <button
           type="button"
           className="btn-back"
@@ -81,7 +90,6 @@ const CourtSchedule: React.FC = () => {
         </button>
 
         <div className="schedule-main-container">
-          {/* Panel de búsqueda */}
           <div className="search-panel">
             <div className="search-field">
               <label htmlFor="schedule-date">Fecha</label>
@@ -121,7 +129,6 @@ const CourtSchedule: React.FC = () => {
             </button>
           </div>
 
-          {/* Tabla de disponibilidad */}
           <div className="table-container">
             <table className="courts-table">
               <thead>
@@ -155,7 +162,6 @@ const CourtSchedule: React.FC = () => {
           </div>
         </div>
 
-        {/* Mascota deportiva: ¡Código mucho más limpio sin estilos en línea! */}
         <div className={`sport-mascot-container mascot-${sportId}`}>
           <img
             src={mascotImage}

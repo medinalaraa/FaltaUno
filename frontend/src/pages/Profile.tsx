@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   IonContent,
   IonPage,
@@ -47,6 +47,17 @@ type Tarjeta = {
   vencimiento: string;
   color: string;
 };
+
+// 1. Interfaz para los datos de reservas desde PostgreSQL
+interface ReservaDB {
+  id: number;
+  fecha_reserva: string;
+  hora_inicio: string;
+  hora_fin: string;
+  estado: string;
+  cancha_nombre: string;
+  tipo_deporte: string;
+}
 
 const KEY_LOGGED = 'user_logged_in';
 const KEY_NOMBRE = 'userName';
@@ -103,8 +114,6 @@ const leerSeccionDeUrl = (): SeccionPerfil => {
   return validas.includes(param as SeccionPerfil) ? (param as SeccionPerfil) : 'menu';
 };
 
-// 1. OPTIMIZACIÓN: Extraemos OptionButton fuera del componente principal
-// para evitar que React lo re-renderice innecesariamente
 const OptionButton = ({
   icon,
   title,
@@ -127,7 +136,6 @@ const OptionButton = ({
     <IonIcon className="profile-option-arrow arrow-rotated" icon={arrowBackOutline} />
   </button>
 );
-
 
 const Profile: React.FC = () => {
   const router = useIonRouter();
@@ -155,6 +163,40 @@ const Profile: React.FC = () => {
   const [terminacionTarjeta, setTerminacionTarjeta] = useState('');
   const [vencimientoTarjeta, setVencimientoTarjeta] = useState('');
   const [errorTarjeta, setErrorTarjeta] = useState('');
+
+  // 2. Estados para almacenar las reservas del usuario
+  const [misReservas, setMisReservas] = useState<ReservaDB[]>([]);
+  const [cargandoReservas, setCargandoReservas] = useState(false);
+
+  // 3. Efecto para cargar reservas cuando se entra a la sección
+  useEffect(() => {
+    if (seccion === 'reservas') {
+      const fetchReservas = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        setCargandoReservas(true);
+        try {
+          const respuesta = await fetch('http://localhost:3000/api/reservas/mis-reservas', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (respuesta.ok) {
+            const data = await respuesta.json();
+            setMisReservas(data);
+          }
+        } catch (error) {
+          console.error("Error al obtener el historial de reservas:", error);
+        } finally {
+          setCargandoReservas(false);
+        }
+      };
+
+      fetchReservas();
+    }
+  }, [seccion]);
 
   const guardarTarjetas = (tarjetas: Tarjeta[]) => {
     setTarjetasGuardadas(tarjetas);
@@ -243,6 +285,9 @@ const Profile: React.FC = () => {
       KEY_RUT,
       KEY_CORREO,
       KEY_TELEFONO,
+      'token',     // Aseguramos que se borre el JWT al salir
+      'userId',
+      'userRol'
     ].forEach((key) => localStorage.removeItem(key));
     router.push('/login', 'root', 'replace');
   };
@@ -297,17 +342,13 @@ const Profile: React.FC = () => {
     setEditando(true);
   };
 
-  // 2. OPTIMIZACIÓN: Corregida la lógica para que al volver siempre vayas
-  // al menú si estabas en otra sección.
   const handleVolver = () => {
     if (seccion === 'datos') {
-      // Si está en datos, vuelve al menú de perfil
       setSeccion('menu');
       setEditando(false);
       setErrores({});
       setGuardadoOk(false);
     } else {
-      // Si está en 'menu', 'reservas', 'pagos', 'preferencias' o 'seguridad', va directo al home
       router.push('/cliente/inicio', 'root');
     }
   };
@@ -396,6 +437,40 @@ const Profile: React.FC = () => {
     </form>
   );
 
+  // --- NUEVA FUNCIÓN PARA CANCELAR RESERVA ---
+  const confirmarCancelacion = (idReserva: number, canchaNombre: string) => {
+    presentAlert({
+      header: 'Cancelar reserva',
+      message: `¿Estás seguro de que deseas cancelar tu reserva en ${canchaNombre}?`,
+      buttons: [
+        { text: 'Volver', role: 'cancel' },
+        { 
+          text: 'Sí, cancelar', 
+          role: 'destructive', 
+          handler: async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            try {
+              const respuesta = await fetch(`http://localhost:3000/api/reservas/${idReserva}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+
+              if (respuesta.ok) {
+                // Removemos la reserva de la lista visualmente sin recargar la página
+                setMisReservas(prev => prev.filter(r => r.id !== idReserva));
+                presentAlert({ header: 'Cancelada', message: 'Tu reserva fue cancelada con éxito.', buttons: ['Aceptar'] });
+              }
+            } catch (error) {
+              console.error("Error al cancelar:", error);
+            }
+          } 
+        },
+      ],
+    });
+  };
+
   const renderReservas = () => (
     <section className="profile-detail reservas-section">
       <div className="reservas-heading">
@@ -411,22 +486,49 @@ const Profile: React.FC = () => {
         <button type="button" className={`reservas-tab ${filtroReservas === 'historial' ? 'reservas-tab-active' : ''}`} onClick={() => setFiltroReservas('historial')}>Historial</button>
       </div>
 
-      <div className="reservas-empty">
-        <div className="reservas-empty-icon"><IonIcon icon={calendarOutline} /></div>
-        {filtroReservas === 'proximas' ? (
-          <>
-            <h2>Aún no tienes reservas</h2>
-            <p>Cuando reserves una cancha, encontrarás aquí la fecha, el horario y los detalles.</p>
-            <button type="button" className="profile-action" onClick={() => router.push('/cliente/inicio')}>Explorar canchas</button>
-          </>
-        ) : (
-          <>
-            <h2>Tu historial está vacío</h2>
-            <p>Aquí podrás consultar tus reservas anteriores cuando estén disponibles.</p>
-            <button type="button" className="profile-action" onClick={() => setFiltroReservas('proximas')}>Ver próximas reservas</button>
-          </>
-        )}
-      </div>
+      {cargandoReservas ? (
+        <div className="ion-text-center ion-padding">
+          <p>Cargando tus reservas...</p>
+        </div>
+      ) : misReservas.length === 0 ? (
+        <div className="reservas-empty">
+          <div className="reservas-empty-icon"><IonIcon icon={calendarOutline} /></div>
+          {filtroReservas === 'proximas' ? (
+            <>
+              <h2>Aún no tienes reservas</h2>
+              <p>Cuando reserves una cancha, encontrarás aquí la fecha, el horario y los detalles.</p>
+              <button type="button" className="profile-action" onClick={() => router.push('/cliente/inicio')}>Explorar canchas</button>
+            </>
+          ) : (
+            <>
+              <h2>Tu historial está vacío</h2>
+              <p>Aquí podrás consultar tus reservas anteriores cuando estén disponibles.</p>
+              <button type="button" className="profile-action" onClick={() => setFiltroReservas('proximas')}>Ver próximas reservas</button>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="reservas-list">
+          {misReservas.map(reserva => (
+            <div key={reserva.id} className="reserva-card" style={{ background: '#fff', borderRadius: '12px', padding: '16px', marginBottom: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 8px 0', color: '#1a1a1a' }}>{reserva.cancha_nombre}</h3>
+              <p style={{ margin: '4px 0', color: '#666' }}><strong>Deporte:</strong> {reserva.tipo_deporte}</p>
+              <p style={{ margin: '4px 0', color: '#666' }}><strong>Fecha:</strong> {new Date(reserva.fecha_reserva).toLocaleDateString('es-CL', { timeZone: 'UTC' })}</p>
+              <p style={{ margin: '4px 0', color: '#666' }}><strong>Horario:</strong> {reserva.hora_inicio.slice(0,5)} - {reserva.hora_fin.slice(0,5)}</p>
+              
+              {/* Botón único de cancelar ocupando el ancho completo */}
+              <div style={{ marginTop: '16px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => confirmarCancelacion(reserva.id, reserva.cancha_nombre)} 
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ff4d4f', background: 'transparent', color: '#ff4d4f', fontWeight: 'bold' }}>
+                  Cancelar Reserva
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 
@@ -587,7 +689,6 @@ const Profile: React.FC = () => {
       <IonContent className="profile-content app-bg">
         <div className="profile-container">
           
-          {/* Reemplaza el botón para que los textos de accesibilidad coincidan con la nueva lógica */}
           <button
             type="button"
             className="profile-panel-back"

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
@@ -10,6 +9,7 @@ import SearchCourts from './pages/SearchCourts';
 import AdminCalendar from './pages/AdminCalendar';
 import CourtSchedule from './pages/CourtSchedule';
 import Profile from './pages/Profile';
+import Pagos from './pages/Pagos'; 
 
 import '@ionic/react/css/core.css';
 import '@ionic/react/css/normalize.css';
@@ -29,6 +29,8 @@ const App: React.FC = () => (
         <Route path="/admin/calendario" element={<AdminCalendar />} />
         <Route path="/registro" element={<Register />} />
         <Route path="/cliente/horarios/:id" element={<CourtSchedule />} />
+        
+        <Route path="/cliente/pago/:id" element={<Pagos />} />
 
         <Route path="/" element={<Navigate to="/cliente/inicio" replace />} />
       </IonRouterOutlet>
